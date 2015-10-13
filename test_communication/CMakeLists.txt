@@ -139,6 +139,26 @@ if(AMENT_ENABLE_TESTING)
       "${middleware_impl}"
       "rclcpp")
 
+    # executables qos_publisher / qos_subscriber
+    add_executable(test_qos_publisher_cpp__${middleware_impl} "test/test_qos_publisher.cpp")
+    target_link_libraries(test_qos_publisher_cpp__${middleware_impl}
+      ${_AMENT_EXPORT_ABSOLUTE_LIBRARIES}
+      ${_AMENT_EXPORT_LIBRARY_TARGETS})
+    add_dependencies(test_qos_publisher_cpp__${middleware_impl} ${PROJECT_NAME})
+    rosidl_target_interfaces(test_qos_publisher_cpp__${middleware_impl}
+      ${PROJECT_NAME} ${typesupport_impl})
+    ament_target_dependencies(test_qos_publisher_cpp__${middleware_impl}
+      "${middleware_impl}"
+      "rclcpp")
+
+    add_executable(test_qos_subscriber_cpp__${middleware_impl} "test/test_qos_subscriber.cpp")
+    add_dependencies(test_qos_subscriber_cpp__${middleware_impl} ${PROJECT_NAME})
+    rosidl_target_interfaces(test_qos_subscriber_cpp__${middleware_impl}
+      ${PROJECT_NAME} ${typesupport_impl})
+    ament_target_dependencies(test_qos_subscriber_cpp__${middleware_impl}
+      "${middleware_impl}"
+      "rclcpp")
+
     # executables requester / replier
     add_executable(test_requester_cpp__${middleware_impl} "test/test_requester.cpp")
     add_dependencies(test_requester_cpp__${middleware_impl} ${PROJECT_NAME})
@@ -155,33 +175,6 @@ if(AMENT_ENABLE_TESTING)
     ament_target_dependencies(test_replier_cpp__${middleware_impl}
       "${middleware_impl}"
       "rclcpp")
-
-    # executables qos_publisher / qos_subscriber
-    add_executable(test_qos_publisher_cpp__${middleware_impl} "test/test_qos_publisher.cpp")
-    add_dependencies(test_qos_publisher_cpp__${middleware_impl} ${PROJECT_NAME})
-    rosidl_target_interfaces(test_qos_publisher_cpp__${middleware_impl}
-      ${PROJECT_NAME} ${typesupport_impl})
-    ament_target_dependencies(test_qos_publisher_cpp__${middleware_impl}
-      "${middleware_impl}"
-      "rclcpp")
-
-    add_executable(test_qos_subscriber_cpp__${middleware_impl} "test/test_qos_subscriber.cpp")
-    add_dependencies(test_qos_subscriber_cpp__${middleware_impl} ${PROJECT_NAME})
-    rosidl_target_interfaces(test_qos_subscriber_cpp__${middleware_impl}
-      ${PROJECT_NAME} ${typesupport_impl})
-    ament_target_dependencies(test_qos_subscriber_cpp__${middleware_impl}
-      "${middleware_impl}"
-      "rclcpp")
-
-    set(TEST_QOS_PUBLISHER_EXECUTABLE "${CMAKE_CURRENT_BINARY_DIR}${test_executable_subfolder}/test_qos_publisher_cpp__${middleware_impl}${test_executable_extension}")
-    set(TEST_QOS_SUBSCRIBER_EXECUTABLE "${CMAKE_CURRENT_BINARY_DIR}${test_executable_subfolder}/test_qos_subscriber_cpp__${middleware_impl}${test_executable_extension}")
-    configure_file(
-      test/test_qos.py.in
-      test_qos_cpp__${middleware_impl}.py
-      @ONLY
-    )
-    ament_add_nose_test(qos_cpp__${middleware_impl} "${CMAKE_CURRENT_BINARY_DIR}/test_qos_cpp__${middleware_impl}.py" TIMEOUT 35)
-    set_tests_properties(qos_cpp__${middleware_impl} PROPERTIES DEPENDS "test_qos_cpp__${middleware_impl} test_qos_cpp__${middleware_impl}")
 
   endforeach()
 
@@ -212,6 +205,20 @@ if(AMENT_ENABLE_TESTING)
           PROPERTIES DEPENDS "test_publisher_cpp__${middleware_impl1};test_subscriber_cpp__${middleware_impl2}"
         )
       endforeach()
+
+      set(TEST_QOS_PUBLISHER_EXECUTABLE "${CMAKE_CURRENT_BINARY_DIR}${test_executable_subfolder}/test_qos_publisher_cpp__${middleware_impl1}${test_executable_extension}")
+      set(TEST_QOS_SUBSCRIBER_EXECUTABLE "${CMAKE_CURRENT_BINARY_DIR}${test_executable_subfolder}/test_qos_subscriber_cpp__${middleware_impl2}${test_executable_extension}")
+      configure_file(
+        test/test_qos.py.in
+        test_qos_cpp${middleware_impls_suffix}.py
+        @ONLY
+      )
+
+      ament_add_nose_test(test_qos_cpp${middleware_impls_suffix} "${CMAKE_CURRENT_BINARY_DIR}/test_qos_cpp${middleware_impls_suffix}.py" TIMEOUT 15)
+      set_tests_properties(
+        test_qos_cpp${middleware_impls_suffix}
+        PROPERTIES DEPENDS "test_qos_publisher_cpp__${middleware_impl1};test_qos_subscriber_cpp__${middleware_impl2}"
+      )
 
       # TODO different vendors can't talk to each other right now
       if((NOT "${middleware_impl1} " STREQUAL "rmw_opensplice_cpp " AND NOT "${middleware_impl2} " STREQUAL "rmw_opensplice_cpp ") OR "${middleware_impl1} " STREQUAL "${middleware_impl2} ")

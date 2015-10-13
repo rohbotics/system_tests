@@ -65,7 +65,7 @@ rclcpp::subscription::SubscriptionBase::SharedPtr subscribe(
 
   rmw_qos_profile_t custom_qos_profile = rmw_qos_profile_default;
   custom_qos_profile.depth = expected_messages.size();
-  custom_qos_profile.durability = RMW_QOS_POLICY_DURABILITY_PERSISTENT;
+  custom_qos_profile.durability = RMW_QOS_POLICY_TRANSIENT_LOCAL_DURABILITY;
 
   auto subscriber = node->create_subscription<T>(
     std::string("test_qos_message_primitives"), custom_qos_profile, callback);
@@ -85,7 +85,7 @@ int main(int argc, char ** argv)
 
   auto messages = get_messages_primitives();
 
-  std::cout << "Wait for a 20 seconds before subscribing" << std::endl;
+  std::cout << "Wait for 20 seconds before subscribing" << std::endl;
 
   // Wait for a while before subscribing
   std::chrono::seconds wait_time(20);
