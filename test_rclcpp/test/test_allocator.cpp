@@ -19,6 +19,7 @@
 #include "rclcpp/rclcpp.hpp"
 
 #include "test_rclcpp/msg/u_int32.hpp"
+#include "test_rclcpp/srv/add_two_ints.hpp"
 
 #ifdef RMW_IMPLEMENTATION
 # define CLASSNAME_(NAME, SUFFIX) NAME ## __ ## SUFFIX
@@ -34,10 +35,23 @@
 
 #endif  // not WIN32
 
+static size_t global_allocs = 0;
+static size_t global_runtime_allocs = 0;
+
+static size_t global_runtime_deallocs = 0;
+static size_t global_deallocs = 0;
+
+static size_t num_allocs = 0;
+static size_t num_deallocs = 0;
+
 static bool test_init = false;
 
+const size_t num_rmw_tokens = 5;
+const char * rmw_tokens[num_rmw_tokens] = {"librmw", "dds", "DDS", "dcps", "DCPS"};
+const size_t iterations_ = 5;
+
 /** Check a demangled stack backtrace of the caller function for the given tokens. */
-static inline bool check_stacktrace(const char ** tokens, size_t num_tokens, size_t max_frames = 6)
+bool check_stacktrace(const char ** tokens, size_t num_tokens, size_t max_frames = 6)
 {
 # ifndef WIN32
   bool match = false;
@@ -107,7 +121,7 @@ static inline bool check_stacktrace(const char ** tokens, size_t num_tokens, siz
             break;
           }
         }
-        // fprintf(stderr, "  %s : %s+%s\n", symbollist[i], funcname, begin_offset);
+        fprintf(stderr, "  %s : %s+%s\n", symbollist[i], funcname, begin_offset);
       } else {
         // demangling failed. Output function name as a C function with
         // no arguments.
@@ -119,7 +133,7 @@ static inline bool check_stacktrace(const char ** tokens, size_t num_tokens, siz
             break;
           }
         }
-        // fprintf(stderr, "  %s : %s()+%s\n", symbollist[i], begin_name, begin_offset);
+        fprintf(stderr, "  %s : %s()+%s\n", symbollist[i], begin_name, begin_offset);
       }
     } else {
       // couldn't parse the line? print the whole line.
@@ -129,7 +143,7 @@ static inline bool check_stacktrace(const char ** tokens, size_t num_tokens, siz
           break;
         }
       }
-      // fprintf(stderr, "  %s\n", symbollist[i]);
+      fprintf(stderr, "  %s\n", symbollist[i]);
     }
   }
 
@@ -145,12 +159,6 @@ static inline bool check_stacktrace(const char ** tokens, size_t num_tokens, siz
 }
 
 // Override global new
-static size_t global_allocs = 0;
-static size_t global_runtime_allocs = 0;
-
-static const size_t num_rmw_tokens = 5;
-static const char * rmw_tokens[num_rmw_tokens] = {"librmw", "dds", "DDS", "dcps", "DCPS"};
-
 void * operator new(std::size_t size)
 {
   if (test_init) {
@@ -163,9 +171,6 @@ void * operator new(std::size_t size)
   }
   return std::malloc(size);
 }
-
-static size_t global_runtime_deallocs = 0;
-static size_t global_deallocs = 0;
 
 void operator delete(void * ptr) noexcept
 {
@@ -191,9 +196,6 @@ void operator delete(void * ptr, size_t) noexcept
     ptr = nullptr;
   }
 }
-
-static size_t num_allocs = 0;
-static size_t num_deallocs = 0;
 
 // Necessary for using custom allocator with std::basic_string in GCC 4.8
 // See: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=56437
@@ -292,10 +294,39 @@ constexpr bool operator!=(const InstrumentedAllocator<T> &,
   return false;
 }
 
-const size_t iterations = 1;
+class AllocatorTestFixture : public ::testing::Test {
+public:
+
+  virtual void TearDown() {
+    printf("Global new was called outside of execution: %zu\n", global_allocs);
+    printf("Global delete was called outside of execution: %zu\n",
+      global_deallocs);
+
+    printf("Calls to global new after spinning some: %zu\n", global_runtime_allocs);
+    printf("Calls to global delete after spinning some: %zu\n", global_runtime_deallocs);
+
+    num_allocs = 0;
+    num_deallocs = 0;
+    global_allocs = 0;
+    global_deallocs = 0;
+    global_runtime_allocs = 0;
+    global_runtime_deallocs = 0;
+    test_init = false;
+  }
+};
 
 using rclcpp::memory_strategies::allocator_memory_strategy::AllocatorMemoryStrategy;
 using rclcpp::message_memory_strategy::MessageMemoryStrategy;
+
+class CLASSNAME(test_allocator, RMW_IMPLEMENTATION) : public AllocatorTestFixture
+{
+};
+
+using UInt32Allocator = InstrumentedAllocator<test_rclcpp::msg::UInt32>;
+using UInt32Deleter = allocator::Deleter<UInt32Allocator, test_rclcpp::msg::UInt32>;
+
+using AddTwoIntsReqAllocator = InstrumentedAllocator<test_rclcpp::srv::AddTwoInts::Request>;
+using AddTwoIntsRespAllocator = InstrumentedAllocator<test_rclcpp::srv::AddTwoInts::Response>;
 
 TEST(CLASSNAME(test_allocator, RMW_IMPLEMENTATION), shared_ptr) {
   rclcpp::init(0, nullptr);
@@ -325,13 +356,10 @@ TEST(CLASSNAME(test_allocator, RMW_IMPLEMENTATION), shared_ptr) {
   // Create msg to be published
   auto msg = std::allocate_shared<test_rclcpp::msg::UInt32>(*alloc.get());
 
-  size_t test_initialization_allocs = num_allocs;
-  size_t test_initialization_deallocs = num_deallocs;
-
   rclcpp::utilities::sleep_for(std::chrono::milliseconds(1));
   // After test_initialization, global new should only be called from within InstrumentedAllocator.
   test_init = true;
-  for (uint32_t i = 0; i < iterations; i++) {
+  for (uint32_t i = 0; i < iterations_; i++) {
     msg->data = i;
     publisher->publish(msg);
     rclcpp::utilities::sleep_for(std::chrono::milliseconds(1));
@@ -339,28 +367,9 @@ TEST(CLASSNAME(test_allocator, RMW_IMPLEMENTATION), shared_ptr) {
   }
   test_init = false;
 
-  size_t runtime_allocs = num_allocs - test_initialization_allocs;
-  size_t runtime_deallocs = num_deallocs - test_initialization_deallocs;
-
   EXPECT_EQ(global_runtime_allocs, 0);
   EXPECT_EQ(global_runtime_deallocs, 0);
 
-  printf("Global new was called outside of execution: %zu\n", global_allocs);
-  printf("Global delete was called outside of execution: %zu\n", global_deallocs);
-  printf("Allocator new was called: %zu\n", test_initialization_allocs);
-  printf("Allocator delete was called: %zu\n", test_initialization_deallocs);
-
-  printf("Calls to global new after spinning some: %zu\n", global_runtime_allocs);
-  printf("Calls to global delete after spinning some: %zu\n", global_runtime_deallocs);
-  printf("Calls to allocator new after spinning some: %zu\n", runtime_allocs);
-  printf("Calls to allocator delete after spinning some: %zu\n", runtime_deallocs);
-
-  num_allocs = 0;
-  num_deallocs = 0;
-  global_allocs = 0;
-  global_deallocs = 0;
-  global_runtime_allocs = 0;
-  global_runtime_deallocs = 0;
   rclcpp::shutdown();
 }
 
@@ -399,9 +408,6 @@ TEST(CLASSNAME(test_allocator, RMW_IMPLEMENTATION), unique_ptr) {
   rclcpp::executors::SingleThreadedExecutor executor(memory_strategy);
   executor.add_node(node);
 
-  size_t test_initialization_allocs = num_allocs;
-  size_t test_initialization_deallocs = num_deallocs;
-
   rclcpp::utilities::sleep_for(std::chrono::milliseconds(1));
   // After test_initialization, global new should only be called from within InstrumentedAllocator.
   test_init = true;
@@ -415,29 +421,56 @@ TEST(CLASSNAME(test_allocator, RMW_IMPLEMENTATION), unique_ptr) {
   }
   test_init = false;
 
-  size_t runtime_allocs = num_allocs - test_initialization_allocs;
-  size_t runtime_deallocs = num_deallocs - test_initialization_deallocs;
+  EXPECT_EQ(global_runtime_allocs, 0);
+  EXPECT_EQ(global_runtime_deallocs, 0);
+
+  rclcpp::shutdown();
+}
+
+TEST(CLASSNAME(test_allocator, RMW_IMPLEMENTATION), service_client) {
+  rclcpp::init(0, nullptr);
+  auto node = rclcpp::Node::make_shared("test_allocator_service_client");
+
+  auto alloc = std::make_shared<InstrumentedAllocator<void>>();
+  auto request_alloc = std::make_shared<AddTwoIntsReqAllocator>();
+
+  auto client = node->create_client<test_rclcpp::srv::AddTwoInts, InstrumentedAllocator<void>>(
+    "test_allocator_add_two_ints",
+    nullptr, alloc);
+
+  std::shared_ptr<rclcpp::memory_strategy::MemoryStrategy> memory_strategy =
+    std::make_shared<AllocatorMemoryStrategy<InstrumentedAllocator<void>>>(alloc);
+
+  rclcpp::executors::SingleThreadedExecutor executor(memory_strategy);
+  //executor.add_node(node);
+
+  auto handle_add_two_ints = [](test_rclcpp::srv::AddTwoInts::Request::SharedPtr request,
+    test_rclcpp::srv::AddTwoInts::Response::SharedPtr response) {
+      ASSERT_NE(request, nullptr);
+      ASSERT_NE(response, nullptr);
+      response->sum = request->a + request->b;
+    };
+
+  auto service = node->create_service<test_rclcpp::srv::AddTwoInts>("test_allocator_add_two_ints",
+    handle_add_two_ints, nullptr, alloc);
+
+  auto request = std::allocate_shared<test_rclcpp::srv::AddTwoInts::Request>(*request_alloc.get());
+  request->a = 2;
+  request->b = 40;
+
+  test_init = true;
+
+  auto result = client->async_send_request(request);
+
+  auto return_code = rclcpp::executors::spin_node_until_future_complete(executor, node, result);
+  test_init = false;
+
+  ASSERT_EQ(return_code, rclcpp::executors::FutureReturnCode::SUCCESS);
+  ASSERT_NE(result.get(), nullptr);
+  EXPECT_EQ(42, result.get()->sum);
 
   EXPECT_EQ(global_runtime_allocs, 0);
   EXPECT_EQ(global_runtime_deallocs, 0);
 
-  printf("Global new was called outside of execution: %zu\n", global_allocs);
-  printf("Global delete was called outside of execution: %zu\n",
-    global_deallocs);
-  printf("Allocator new was called during initalization: %zu\n", test_initialization_allocs);
-  printf("Allocator delete was called during initalization: %zu\n", test_initialization_deallocs);
-
-  printf("Calls to global new after spinning some: %zu\n", global_runtime_allocs);
-  printf("Calls to global delete after spinning some: %zu\n", global_runtime_deallocs);
-
-  printf("Calls to allocator new after spinning some: %zu\n", runtime_allocs);
-  printf("Calls to allocator delete after spinning some: %zu\n", runtime_deallocs);
-
-  num_allocs = 0;
-  num_deallocs = 0;
-  global_allocs = 0;
-  global_deallocs = 0;
-  global_runtime_allocs = 0;
-  global_runtime_deallocs = 0;
   rclcpp::shutdown();
 }
