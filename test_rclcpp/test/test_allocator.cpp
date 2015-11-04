@@ -442,7 +442,7 @@ TEST(CLASSNAME(test_allocator, RMW_IMPLEMENTATION), service_client) {
     std::make_shared<AllocatorMemoryStrategy<InstrumentedAllocator<void>>>(alloc);
 
   rclcpp::executors::SingleThreadedExecutor executor(memory_strategy);
-  //executor.add_node(node);
+  executor.add_node(node);
 
   auto handle_add_two_ints = [](test_rclcpp::srv::AddTwoInts::Request::SharedPtr request,
     test_rclcpp::srv::AddTwoInts::Response::SharedPtr response) {
