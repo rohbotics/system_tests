@@ -51,7 +51,7 @@ const char * rmw_tokens[num_rmw_tokens] = {"librmw", "dds", "DDS", "dcps", "DCPS
 const size_t iterations_ = 5;
 
 /** Check a demangled stack backtrace of the caller function for the given tokens. */
-bool check_stacktrace(const char ** tokens, size_t num_tokens, size_t max_frames = 6)
+bool check_stacktrace(const char ** tokens, size_t num_tokens, size_t max_frames = 8)
 {
 # ifndef WIN32
   bool match = false;
@@ -75,7 +75,14 @@ bool check_stacktrace(const char ** tokens, size_t num_tokens, size_t max_frames
   size_t funcnamesize = 256;
   char * funcname = static_cast<char *>(malloc(funcnamesize));
 
-  // fprintf(stderr, ">>>> stack trace:\n");
+  const size_t output_size = 2048;
+  char * output_buffer = static_cast<char*>(malloc(output_size));
+  memset(output_buffer, 0, 2048);
+  size_t output_idx = 0;
+
+  snprintf(output_buffer+output_idx, output_size - output_idx, ">>> stack trace:\n");
+  output_idx = strnlen(output_buffer, output_size);
+
   // iterate over the returned symbol lines. skip the first, it is the
   // address of this function.
   for (int i = 1; i < addrlen; i++) {
@@ -121,7 +128,9 @@ bool check_stacktrace(const char ** tokens, size_t num_tokens, size_t max_frames
             break;
           }
         }
-        fprintf(stderr, "  %s : %s+%s\n", symbollist[i], funcname, begin_offset);
+        snprintf(output_buffer + output_idx, output_size - output_idx,
+          "  %s : %s+%s\n", symbollist[i], funcname, begin_offset);
+        output_idx = strnlen(output_buffer, output_size);
       } else {
         // demangling failed. Output function name as a C function with
         // no arguments.
@@ -133,7 +142,9 @@ bool check_stacktrace(const char ** tokens, size_t num_tokens, size_t max_frames
             break;
           }
         }
-        fprintf(stderr, "  %s : %s()+%s\n", symbollist[i], begin_name, begin_offset);
+        snprintf(output_buffer + output_idx, output_size - output_idx,
+          "  %s : %s()+%s\n", symbollist[i], begin_name, begin_offset);
+        output_idx = strnlen(output_buffer, output_size);
       }
     } else {
       // couldn't parse the line? print the whole line.
@@ -143,7 +154,8 @@ bool check_stacktrace(const char ** tokens, size_t num_tokens, size_t max_frames
           break;
         }
       }
-      fprintf(stderr, "  %s\n", symbollist[i]);
+      snprintf(output_buffer+output_idx, output_size - output_idx, "  %s\n", symbollist[i]);
+      output_idx = strnlen(output_buffer, output_size);
     }
   }
 
@@ -151,6 +163,7 @@ bool check_stacktrace(const char ** tokens, size_t num_tokens, size_t max_frames
   free(symbollist);
   if (!match) {
     fprintf(stderr, "WARNING: Called function did not match accepted tokens\n");
+    fprintf(stderr, "%s", output_buffer);
   }
   return match;
 #else
@@ -191,7 +204,14 @@ void operator delete(void * ptr) noexcept
 void operator delete(void * ptr, size_t) noexcept
 {
   if (ptr != nullptr) {
-    global_deallocs++;
+    if (test_init) {
+      // Check the stacktrace to see the call originated in librmw or a DDS implementation
+      if (!check_stacktrace(rmw_tokens, num_rmw_tokens)) {
+        global_runtime_deallocs++;
+      }
+    } else {
+      global_deallocs++;
+    }
     std::free(ptr);
     ptr = nullptr;
   }
@@ -253,6 +273,7 @@ public:
     }
     num_deallocs++;
     std::free(ptr);
+    ptr = nullptr;
   }
 
   // construct and destroy should not be required to implement allocator_traits,
@@ -294,36 +315,29 @@ constexpr bool operator!=(const InstrumentedAllocator<T> &,
   return false;
 }
 
-class AllocatorTestFixture : public ::testing::Test {
-public:
+static void teardown() {
+  printf("Global new was called outside of execution: %zu\n", global_allocs);
+  printf("Global delete was called outside of execution: %zu\n",
+    global_deallocs);
 
-  virtual void TearDown() {
-    printf("Global new was called outside of execution: %zu\n", global_allocs);
-    printf("Global delete was called outside of execution: %zu\n",
-      global_deallocs);
+  printf("Calls to global new after spinning some: %zu\n", global_runtime_allocs);
+  printf("Calls to global delete after spinning some: %zu\n", global_runtime_deallocs);
 
-    printf("Calls to global new after spinning some: %zu\n", global_runtime_allocs);
-    printf("Calls to global delete after spinning some: %zu\n", global_runtime_deallocs);
+  num_allocs = 0;
+  num_deallocs = 0;
+  global_allocs = 0;
+  global_deallocs = 0;
+  global_runtime_allocs = 0;
+  global_runtime_deallocs = 0;
+  test_init = false;
+}
 
-    num_allocs = 0;
-    num_deallocs = 0;
-    global_allocs = 0;
-    global_deallocs = 0;
-    global_runtime_allocs = 0;
-    global_runtime_deallocs = 0;
-    test_init = false;
-  }
-};
 
 using rclcpp::memory_strategies::allocator_memory_strategy::AllocatorMemoryStrategy;
 using rclcpp::message_memory_strategy::MessageMemoryStrategy;
 
-class CLASSNAME(test_allocator, RMW_IMPLEMENTATION) : public AllocatorTestFixture
-{
-};
-
 using UInt32Allocator = InstrumentedAllocator<test_rclcpp::msg::UInt32>;
-using UInt32Deleter = allocator::Deleter<UInt32Allocator, test_rclcpp::msg::UInt32>;
+using UInt32Deleter = rclcpp::allocator::Deleter<UInt32Allocator, test_rclcpp::msg::UInt32>;
 
 using AddTwoIntsReqAllocator = InstrumentedAllocator<test_rclcpp::srv::AddTwoInts::Request>;
 using AddTwoIntsRespAllocator = InstrumentedAllocator<test_rclcpp::srv::AddTwoInts::Response>;
@@ -411,7 +425,7 @@ TEST(CLASSNAME(test_allocator, RMW_IMPLEMENTATION), unique_ptr) {
   rclcpp::utilities::sleep_for(std::chrono::milliseconds(1));
   // After test_initialization, global new should only be called from within InstrumentedAllocator.
   test_init = true;
-  for (uint32_t i = 0; i < iterations; i++) {
+  for (uint32_t i = 0; i < iterations_; i++) {
     auto msg = std::unique_ptr<test_rclcpp::msg::UInt32, UInt32Deleter>(
       std::allocator_traits<UInt32Allocator>::allocate(*alloc.get(), 1));
     msg->data = i;
@@ -425,6 +439,7 @@ TEST(CLASSNAME(test_allocator, RMW_IMPLEMENTATION), unique_ptr) {
   EXPECT_EQ(global_runtime_deallocs, 0);
 
   rclcpp::shutdown();
+  teardown();
 }
 
 TEST(CLASSNAME(test_allocator, RMW_IMPLEMENTATION), service_client) {
@@ -441,9 +456,6 @@ TEST(CLASSNAME(test_allocator, RMW_IMPLEMENTATION), service_client) {
   std::shared_ptr<rclcpp::memory_strategy::MemoryStrategy> memory_strategy =
     std::make_shared<AllocatorMemoryStrategy<InstrumentedAllocator<void>>>(alloc);
 
-  rclcpp::executors::SingleThreadedExecutor executor(memory_strategy);
-  executor.add_node(node);
-
   auto handle_add_two_ints = [](test_rclcpp::srv::AddTwoInts::Request::SharedPtr request,
     test_rclcpp::srv::AddTwoInts::Response::SharedPtr response) {
       ASSERT_NE(request, nullptr);
@@ -458,14 +470,17 @@ TEST(CLASSNAME(test_allocator, RMW_IMPLEMENTATION), service_client) {
   request->a = 2;
   request->b = 40;
 
+  rclcpp::executors::SingleThreadedExecutor executor(memory_strategy);
+  executor.add_node(node);
+
   test_init = true;
 
   auto result = client->async_send_request(request);
 
-  auto return_code = rclcpp::executors::spin_node_until_future_complete(executor, node, result);
+  auto return_code = executor.spin_until_future_complete(result);
   test_init = false;
 
-  ASSERT_EQ(return_code, rclcpp::executors::FutureReturnCode::SUCCESS);
+  ASSERT_EQ(return_code, rclcpp::executor::FutureReturnCode::SUCCESS);
   ASSERT_NE(result.get(), nullptr);
   EXPECT_EQ(42, result.get()->sum);
 
@@ -473,4 +488,5 @@ TEST(CLASSNAME(test_allocator, RMW_IMPLEMENTATION), service_client) {
   EXPECT_EQ(global_runtime_deallocs, 0);
 
   rclcpp::shutdown();
+  teardown();
 }
