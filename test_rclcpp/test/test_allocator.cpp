@@ -162,8 +162,7 @@ bool check_stacktrace(const char ** tokens, size_t num_tokens, size_t max_frames
   free(funcname);
   free(symbollist);
   if (!match) {
-    fprintf(stderr, "WARNING: Called function did not match accepted tokens\n");
-    fprintf(stderr, "%s", output_buffer);
+    fprintf(stderr, "%s\n", output_buffer);
   }
   return match;
 #else
