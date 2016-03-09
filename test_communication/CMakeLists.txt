@@ -37,8 +37,13 @@ if(AMENT_ENABLE_TESTING)
     "msg/UInt32.msg"
   )
   set(service_files
+    "srv/DynamicArrayNested.srv"
+    "srv/DynamicArrayPrimitives.srv"
     "srv/Empty.srv"
+    "srv/Nested.srv"
     "srv/Primitives.srv"
+    "srv/StaticArrayNested.srv"
+    "srv/StaticArrayPrimitives.srv"
   )
   rosidl_generate_interfaces(${PROJECT_NAME}
     ${message_files}
