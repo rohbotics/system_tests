@@ -57,8 +57,6 @@ void wait_for_future(
 }
 
 TEST(CLASSNAME(test_subscription, RMW_IMPLEMENTATION), subscription_and_spinning) {
-  rclcpp::init(0, nullptr);
-
   auto node = rclcpp::Node::make_shared("test_subscription");
 
   rmw_qos_profile_t custom_qos_profile = rmw_qos_profile_default;
@@ -459,4 +457,12 @@ TEST(CLASSNAME(test_subscription, RMW_IMPLEMENTATION), create_subscription_with_
 
   auto subscriber = node->create_subscription<test_rclcpp::msg::UInt32>(
     "test_subscription", 10, callback);
+}
+int main(int argc, char ** argv)
+{
+  rclcpp::init(argc, argv);
+  ::testing::InitGoogleTest(&argc, argv);
+  int ret = RUN_ALL_TESTS();
+  rclcpp::shutdown();
+  return ret;
 }

@@ -25,8 +25,6 @@ static const std::chrono::milliseconds sleep_per_loop(10);
 static const int max_loops = 200;
 
 TEST(test_intra_process_within_one_node, nominal_usage) {
-  rclcpp::init(0, nullptr);
-
   // use intra process = true
   auto node = rclcpp::Node::make_shared("test_intra_process", true);
 
@@ -156,4 +154,13 @@ TEST(test_intra_process_within_one_node, nominal_usage) {
   printf("spin_node_some() - no callbacks expected\n");
   executor.spin_node_some(node);
   ASSERT_EQ(5, counter);
+}
+
+int main(int argc, char ** argv)
+{
+  rclcpp::init(argc, argv);
+  ::testing::InitGoogleTest(&argc, argv);
+  int ret = RUN_ALL_TESTS();
+  rclcpp::shutdown();
+  return ret;
 }

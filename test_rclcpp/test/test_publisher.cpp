@@ -31,7 +31,6 @@
 
 // Short test for the const reference publish signature.
 TEST(CLASSNAME(test_publisher, RMW_IMPLEMENTATION), publish_with_const_reference) {
-  rclcpp::init(0, nullptr);
   auto node = rclcpp::Node::make_shared("test_publisher");
 
   auto publisher = node->create_publisher<test_rclcpp::msg::UInt32>("test_publisher", 10);
@@ -79,4 +78,13 @@ TEST(CLASSNAME(test_publisher, RMW_IMPLEMENTATION), publish_with_const_reference
     executor.spin_node_some(node);
   }
   ASSERT_EQ(1, counter);
+}
+
+int main(int argc, char ** argv)
+{
+  rclcpp::init(argc, argv);
+  ::testing::InitGoogleTest(&argc, argv);
+  int ret = RUN_ALL_TESTS();
+  rclcpp::shutdown();
+  return ret;
 }

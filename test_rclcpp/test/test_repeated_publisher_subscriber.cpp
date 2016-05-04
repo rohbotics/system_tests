@@ -29,7 +29,6 @@
 #endif
 
 TEST(CLASSNAME(test_repeated_publisher_subscriber, RMW_IMPLEMENTATION), subscription_and_spinning) {
-  rclcpp::init(0, nullptr);
 
   auto node = rclcpp::Node::make_shared("test_repeated_publisher_subscriber");
 
@@ -93,4 +92,13 @@ TEST(CLASSNAME(test_repeated_publisher_subscriber, RMW_IMPLEMENTATION), subscrip
     printf("Destroying publisher and subscriber...\n");
     fflush(stdout);
   }
+}
+
+int main(int argc, char ** argv)
+{
+  rclcpp::init(argc, argv);
+  ::testing::InitGoogleTest(&argc, argv);
+  int ret = RUN_ALL_TESTS();
+  rclcpp::shutdown();
+  return ret;
 }

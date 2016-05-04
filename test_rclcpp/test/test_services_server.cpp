@@ -48,6 +48,6 @@ int main(int argc, char ** argv)
     "add_two_ints_reqid_return_request", handle_add_two_ints_reqid);
 
   rclcpp::spin(node);
-
+  rclcpp::shutdown();
   return 0;
 }

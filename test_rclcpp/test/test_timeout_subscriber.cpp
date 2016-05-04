@@ -35,8 +35,6 @@ void callback(const test_rclcpp::msg::UInt32::SharedPtr /*msg*/)
 }
 
 TEST(CLASSNAME(test_timeout_subscriber, RMW_IMPLEMENTATION), timeout_subscriber) {
-  rclcpp::init(0, nullptr);
-
   auto start = std::chrono::steady_clock::now();
 
   auto node = rclcpp::Node::make_shared("test_timeout_subscriber");
@@ -73,4 +71,13 @@ TEST(CLASSNAME(test_timeout_subscriber, RMW_IMPLEMENTATION), timeout_subscriber)
   auto end = std::chrono::steady_clock::now();
   std::chrono::duration<float> diff = (end - start);
   std::cout << "subscribed for " << diff.count() << " seconds" << std::endl;
+}
+
+int main(int argc, char ** argv)
+{
+  rclcpp::init(argc, argv);
+  ::testing::InitGoogleTest(&argc, argv);
+  int ret = RUN_ALL_TESTS();
+  rclcpp::shutdown();
+  return ret;
 }

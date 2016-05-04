@@ -93,5 +93,6 @@ int main(int argc, char ** argv)
     fprintf(stderr, "Unknown message argument '%s'\n", message.c_str());
     return 1;
   }
+  rclcpp::shutdown();
   return 0;
 }

@@ -205,7 +205,9 @@ TEST(CLASSNAME(test_spin, RMW_IMPLEMENTATION), cancel) {
 int main(int argc, char ** argv)
 {
   // NOTE: use custom main to ensure that rclcpp::init is called only once
-  rclcpp::init(0, nullptr);
+  rclcpp::init(argc, argv);
   ::testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
+  int ret = RUN_ALL_TESTS();
+  rclcpp::shutdown();
+  return ret;
 }

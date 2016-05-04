@@ -119,5 +119,7 @@ int main(int argc, char ** argv)
     fprintf(stderr, "Unknown service argument '%s'\n", service.c_str());
     return 1;
   }
+
+  rclcpp::shutdown();
   return rc;
 }

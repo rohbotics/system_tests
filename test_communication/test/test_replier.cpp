@@ -93,5 +93,6 @@ int main(int argc, char ** argv)
   std::chrono::duration<float> diff = (end - start);
   std::cout << "replied for " << diff.count() << " seconds" << std::endl;
 
+  rclcpp::shutdown();
   return 0;
 }
