@@ -105,6 +105,9 @@ if(BUILD_TESTING)
     custom_gtest(gtest_executor
       "test/test_executor.cpp"
       TIMEOUT 30)
+    custom_gtest(gtest_graph_api
+      "test/test_graph_api.cpp"
+      TIMEOUT 30)
     custom_gtest(gtest_repeated_publisher_subscriber
       "test/test_repeated_publisher_subscriber.cpp"
       TIMEOUT 15)
