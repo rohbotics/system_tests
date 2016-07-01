@@ -116,7 +116,7 @@ if(BUILD_TESTING)
     # add_executable(${target}${target_suffix} ${ARGN})
     ament_add_gtest(
       "${target}${target_suffix}" ${ARGN}
-      TIMEOUT 15
+      TIMEOUT 30
       ENV RCL_ASSERT_RMW_ID_MATCHES=${rmw_implementation})
     target_link_libraries(${target}${target_suffix}
       ${_AMENT_EXPORT_ABSOLUTE_LIBRARIES}
