@@ -18,6 +18,11 @@ import importlib
 import os
 import sys
 
+import rclpy
+from rclpy.qos import qos_profile_default
+from rclpy.impl.rmw_implementation_tools import select_rmw_implementation
+from rclpy.impl.rmw_implementation_tools import get_rmw_implementations
+
 # this is needed to allow import of test_communication messages
 sys.path.insert(0, os.getcwd())
 
@@ -43,10 +48,6 @@ def listener_cb(msg, received_messages, expected_msgs):
 
 
 def listener(message_name, number_of_cycles):
-    import rclpy
-    from rclpy.qos import qos_profile_default
-    from rclpy.impl.rmw_implementation_tools import select_rmw_implementation
-    from rclpy.impl.rmw_implementation_tools import get_rmw_implementations
     from message_fixtures import get_test_msg
 
     message_pkg = 'test_communication'
@@ -83,8 +84,6 @@ def listener(message_name, number_of_cycles):
         'Should have received {} {} messages from talker'.format(len(expected_msgs), message_name)
 
 if __name__ == '__main__':
-    from rclpy.impl.rmw_implementation_tools import get_rmw_implementations
-    rmw_implementations = get_rmw_implementations()
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('message_name', default='Primitives',
                         help='name of the ROS message')
