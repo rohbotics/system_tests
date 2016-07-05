@@ -14,6 +14,7 @@
 
 #include <iostream>
 #include <memory>
+#include <string>
 #include <thread>  // TODO(wjwwood): remove me when Connext and FastRTPS exclusions are removed
 
 #include "gtest/gtest.h"
@@ -68,7 +69,15 @@ TEST(CLASSNAME(service_client, RMW_IMPLEMENTATION), client_scope_regression_test
   {
     printf("creating second client\n");
     std::cout.flush();
-    auto client2 = node->create_client<test_rclcpp::srv::AddTwoInts>("client_scope");
+    rmw_qos_profile_t rmw_qos_profile = rmw_qos_profile_services_default;
+    if (std::string(rmw_get_implementation_identifier()) == "rmw_fastrtps_cpp") {
+      // FastRTPS requires (for the second client) that the service request uses
+      // RMW_QOS_POLICY_BEST_EFFORT and the reply uses RMW_QOS_POLICY_RELIABLE instead of both using
+      // RMW_QOS_POLICY_BEST_EFFORT which is the default for services.
+      rmw_qos_profile.reliability = RMW_QOS_POLICY_RELIABILITY_SYSTEM_DEFAULT;
+    }
+    auto client2 = node->create_client<test_rclcpp::srv::AddTwoInts>(
+      "client_scope", rmw_qos_profile);
     {  // TODO(wjwwood): remove this block when Connext and FastRTPS support wait_for_service.
       try {
         if (!client2->wait_for_service(20_s)) {
